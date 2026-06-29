@@ -1,0 +1,22 @@
+# Docker images
+images/image-digests.txt
+*.tar
+
+# Runtime stacks, but keep folder
+stacks/*
+!stacks/.gitkeep
+
+# Offline packages
+install/packages/
+
+# Environment
+.env
+.env.*
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+

@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+
+PKG_DIR="$(dirname "$0")/packages"
+mkdir -p "$PKG_DIR"
+
+echo "--- Updating offline Docker packages ---"
+
+# Add Docker repo temporarily
+DISTRO=$(lsb_release -cs)
+ARCH=$(dpkg --print-architecture)
+echo "Adding Docker repo for $DISTRO / $ARCH..."
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /tmp/docker.gpg
+sudo mv /tmp/docker.gpg /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $DISTRO stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+
+# List of Docker packages
+packages=(docker-ce docker-ce-cli containerd.io docker-compose-plugin)
+
+# Download latest .deb packages
+for pkg in "${packages[@]}"; do
+    echo "Downloading $pkg..."
+    apt-get download "$pkg"
+done
+
+# Move .deb files to packages/
+mv ./*.deb "$PKG_DIR/"
+
+# Optional: remove temporary repo
+sudo rm /etc/apt/sources.list.d/docker.list
+sudo rm /usr/share/keyrings/docker-archive-keyring.gpg
+
+echo "--- Offline packages updated in $PKG_DIR ---"
