@@ -10,7 +10,7 @@ COMPOSE_SH="$SCRIPT_DIR/compose.sh"
 
 NAS_DIR="/mnt/sangvikh-nas/Backup/sangvikh-server/docker"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$NAS_DIR/docker_$TIMESTAMP.tar.gz"
+BACKUP_FILE="$NAS_DIR/docker_$TIMESTAMP.tar.zst"
 BACKUP_KEEP=3
 
 LOG_FILE="$SCRIPT_DIR/backup.log"
@@ -65,27 +65,27 @@ echo "Stopping all containers..."
 echo "=============================="
 "$COMPOSE_SH" down
 
-# Create archive
+# Create archive + checksum
 echo
 echo "=============================="
 echo "Creating backup..."
 echo "=============================="
+
 tar \
     --checkpoint=1000 \
     --checkpoint-action=ttyout=">>> tar progress: %u files archived\r" \
     --totals \
-    -czf "$BACKUP_FILE.partial" \
+    --zstd \
+    -cf - \
     -C "$(dirname "$SCRIPT_DIR")" \
-    "$(basename "$SCRIPT_DIR")"
+    "$(basename "$SCRIPT_DIR")" \
+| tee "$BACKUP_FILE.partial" \
+| sha256sum \
+| awk -v file="$BACKUP_FILE" '{print $1, "  " file}' \
+| tee "$BACKUP_FILE.sha256" > /dev/null
 
 mv "$BACKUP_FILE.partial" "$BACKUP_FILE"
 
-# Checksum
-echo
-echo "=============================="
-echo "Creating checksum..."
-echo "=============================="
-sha256sum "$BACKUP_FILE" > "$BACKUP_FILE.sha256"
 echo "Checksum:"
 cat "$BACKUP_FILE.sha256"
 
@@ -94,7 +94,7 @@ echo "=============================="
 echo "Pruning old backups (keeping newest $BACKUP_KEEP)..."
 echo "=============================="
 
-backups=$(ls -1t "$NAS_DIR"/docker_*.tar.gz 2>/dev/null || true)
+backups=$(ls -1t "$NAS_DIR"/docker_*.tar.zst 2>/dev/null || true)
 
 echo "$backups" \
     | tail -n +$((BACKUP_KEEP + 1)) \
@@ -112,5 +112,5 @@ echo
 echo "=============================="
 echo "Current backups:"
 echo "=============================="
-ls -lh "$NAS_DIR"/docker_*.tar.gz 2>/dev/null || echo "None found"
+ls -lh "$NAS_DIR"/docker_*.tar.zst 2>/dev/null || echo "None found"
 echo
