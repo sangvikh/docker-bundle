@@ -113,5 +113,5 @@ echo
 echo "=============================="
 echo "Current backups:"
 echo "=============================="
-ls -1t "$NAS_DIR"/docker_*.tar.gz 2>/dev/null | sed 's#.*/##' || echo "None found"
+ls -lh "$NAS_DIR"/docker_*.tar.gz 2>/dev/null || echo "None found"
 echo
