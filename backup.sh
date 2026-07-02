@@ -73,7 +73,6 @@ echo "=============================="
 tar \
     --checkpoint=1000 \
     --checkpoint-action=ttyout=">>> tar progress: %u files archived\r" \
-    --exclude='.git' \
     --totals \
     -czf "$BACKUP_FILE.partial" \
     -C "$(dirname "$SCRIPT_DIR")" \
