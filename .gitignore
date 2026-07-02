@@ -1,6 +1,7 @@
 # Docker images
 images/image-digests.txt
 *.tar
+*.digest
 
 # Runtime stacks, but keep folder
 stacks/*

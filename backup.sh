@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root."
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_SH="$SCRIPT_DIR/compose.sh"
@@ -32,7 +36,7 @@ echo "Saving Docker images..."
 
 # Create archive
 echo "Creating backup..."
-sudo tar czf "$BACKUP_FILE" -C "$(dirname "$SCRIPT_DIR")" "$(basename "$SCRIPT_DIR")"
+tar czf "$BACKUP_FILE" -C "$(dirname "$SCRIPT_DIR")" "$(basename "$SCRIPT_DIR")"
 
 # Checksum
 sha256sum "$BACKUP_FILE" > "$BACKUP_FILE.sha256"
