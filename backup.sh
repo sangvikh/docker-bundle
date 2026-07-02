@@ -13,35 +13,87 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$NAS_DIR/docker_$TIMESTAMP.tar.gz"
 BACKUP_KEEP=3
 
+LOG_FILE="$SCRIPT_DIR/backup.log"
+: > "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 findmnt -T "$NAS_DIR" >/dev/null || {
     echo "Backup destination is not mounted!"
     exit 1
 }
 
+cleanup() {
+    status=$?
+
+    if [ "$status" -ne 0 ]; then
+        echo "--- FAILED: Complete Docker Stack Backup, $(date) (exit status $status) ---"
+
+        rm -f "$BACKUP_FILE.partial"
+        rm -f "$BACKUP_FILE"
+        rm -f "$BACKUP_FILE.sha256"
+    else
+        echo "--- SUCCESS: Complete Docker Stack Backup, $(date) ---"
+    fi
+
+    echo
+    echo "=============================="
+    echo "Starting containers..."
+    echo "=============================="
+    "$COMPOSE_SH" up -d || true
+
+    exit $status
+}
+
+trap cleanup EXIT INT TERM HUP
+
 mkdir -p "$NAS_DIR"
 
-echo "--- Complete Docker Stack Backup Started ---"
+echo "--- START: Complete Docker Stack Backup, $(date) ---"
 echo "Backup will be saved to: $BACKUP_FILE"
 
-# Start containers again on exit
-trap 'echo "Starting containers..."; "$COMPOSE_SH" up -d || true' EXIT
-
-# Stop all stacks cleanly
-echo "Stopping all containers..."
-"$COMPOSE_SH" down
-
 # Save currently available images
+echo
+echo "=============================="
 echo "Saving Docker images..."
+echo "=============================="
 "$SCRIPT_DIR/images/save-images.sh"
 
+# Stop all stacks cleanly
+echo
+echo "=============================="
+echo "Stopping all containers..."
+echo "=============================="
+"$COMPOSE_SH" down
+
 # Create archive
+echo
+echo "=============================="
 echo "Creating backup..."
-tar czf "$BACKUP_FILE" -C "$(dirname "$SCRIPT_DIR")" "$(basename "$SCRIPT_DIR")"
+echo "=============================="
+tar \
+    --checkpoint=1000 \
+    --checkpoint-action=ttyout=">>> tar progress: %u files archived\r" \
+    --exclude='.git' \
+    --totals \
+    -czf "$BACKUP_FILE.partial" \
+    -C "$(dirname "$SCRIPT_DIR")" \
+    "$(basename "$SCRIPT_DIR")"
+
+mv "$BACKUP_FILE.partial" "$BACKUP_FILE"
 
 # Checksum
+echo
+echo "=============================="
+echo "Creating checksum..."
+echo "=============================="
 sha256sum "$BACKUP_FILE" > "$BACKUP_FILE.sha256"
+echo "Checksum:"
+cat "$BACKUP_FILE.sha256"
 
+echo
+echo "=============================="
 echo "Pruning old backups (keeping newest $BACKUP_KEEP)..."
+echo "=============================="
 
 backups=$(ls -1t "$NAS_DIR"/docker_*.tar.gz 2>/dev/null || true)
 
@@ -55,4 +107,11 @@ echo "$backups" \
         rm -f "${old_backup}.sha256"
     done
 
-echo "--- Backup Complete ---"
+echo "Prune complete"
+
+echo
+echo "=============================="
+echo "Current backups:"
+echo "=============================="
+ls -1t "$NAS_DIR"/docker_*.tar.gz 2>/dev/null | sed 's#.*/##' || echo "None found"
+echo

@@ -11,6 +11,21 @@ This directory contains everything needed to restore the Docker environment on a
 * `backup.sh` — Creates a backup archive of this directory.
 * `readme.md` — This document.
 
+## Creating a Backup
+
+```bash
+sudo ./backup.sh
+```
+
+The backup script:
+
+- Stops all Docker stacks.
+- Saves Docker images.
+- Archives the entire `docker/` directory.
+- Generates a SHA-256 checksum.
+- Keeps the newest 3 backups.
+- Restarts all stacks automatically.
+
 ## Restoring the Environment
 
 ### 1. Extract the archive
