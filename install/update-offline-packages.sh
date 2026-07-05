@@ -1,47 +1,80 @@
 #!/bin/bash
 set -e
 
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
 ARCH="$(dpkg --print-architecture)"
 DISTRO="$(lsb_release -cs)"
 
-PKG_DIR="$(dirname "$0")/packages/$ARCH"
+PKG_DIR="$DIR/packages/$ARCH"
 mkdir -p "$PKG_DIR"
 
+KEYRING="/usr/share/keyrings/docker-archive-keyring.gpg"
+REPO_FILE="/etc/apt/sources.list.d/docker.list"
+
+PACKAGES=(
+    docker-ce
+    docker-ce-cli
+    containerd.io
+    docker-compose-plugin
+)
+
+cleanup() {
+    sudo rm -f "$REPO_FILE"
+    sudo rm -f "$KEYRING"
+}
+
+trap cleanup EXIT
+
 echo "--- Updating offline Docker packages ---"
-echo "Architecture: $ARCH"
-echo "Distro: $DISTRO"
-echo "Target folder: $PKG_DIR"
+echo "Architecture : $ARCH"
+echo "Distribution : $DISTRO"
+echo "Target       : $PKG_DIR"
 
-# Temporary repo setup
-echo "Adding Docker repo..."
+echo
+echo "--- Cleaning old packages ---"
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /tmp/docker.gpg
-sudo mv /tmp/docker.gpg /usr/share/keyrings/docker-archive-keyring.gpg
+rm -f \
+    "$PKG_DIR"/docker-ce_*.deb \
+    "$PKG_DIR"/docker-ce-cli_*.deb \
+    "$PKG_DIR"/containerd.io_*.deb \
+    "$PKG_DIR"/docker-compose-plugin_*.deb
 
-echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $DISTRO stable" \
-| sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+echo
+echo "--- Adding temporary Docker repository ---"
+
+curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" \
+    | gpg --dearmor -o /tmp/docker.gpg
+
+sudo mv /tmp/docker.gpg "$KEYRING"
+
+echo "deb [arch=$ARCH signed-by=$KEYRING] https://download.docker.com/linux/ubuntu $DISTRO stable" \
+    | sudo tee "$REPO_FILE" >/dev/null
 
 sudo apt update
 
-# Go directly into target directory
-cd "$PKG_DIR"
+echo
+echo "--- Downloading packages ---"
 
-# Docker packages to download
-packages=(
-  docker-ce
-  docker-ce-cli
-  containerd.io
-  docker-compose-plugin
+(
+    cd "$PKG_DIR"
+
+    for pkg in "${PACKAGES[@]}"; do
+        echo "Downloading $pkg..."
+        apt-get download "$pkg"
+    done
 )
 
-# Download .deb files
-for pkg in "${packages[@]}"; do
-    echo "Downloading $pkg..."
-    apt-get download "$pkg"
+echo
+echo "--- Verifying downloads ---"
+
+for pkg in "${PACKAGES[@]}"; do
+    if ! ls "$PKG_DIR"/"$pkg"_*.deb >/dev/null 2>&1; then
+        echo "ERROR: Failed to download $pkg"
+        exit 1
+    fi
 done
 
-# Cleanup repo
-sudo rm -f /etc/apt/sources.list.d/docker.list
-sudo rm -f /usr/share/keyrings/docker-archive-keyring.gpg
+echo
+echo "--- Offline packages updated successfully ---"
 
-echo "--- Offline packages updated for $ARCH ---"
