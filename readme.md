@@ -1,15 +1,21 @@
 # Offline Docker Stack Archive
 
-This directory contains everything needed to restore the Docker environment on another machine without an Internet connection.
+This repository contains everything required to restore a complete Docker environment on another machine, including Docker itself, Docker images, Compose projects, and persistent application data.
+
+The archive is designed to work completely offline after extraction.
 
 ## Contents
 
-* `stacks/`  — Docker Compose projects, configuration, and persistent data.
+* `stacks/` — Docker Compose projects, configuration, and persistent application data.
 * `images/` — Docker images saved as `.tar` archives, plus helper scripts to save and load them.
-* `install/` — Offline Docker installation scripts and required packages.
+* `install/` — Offline Docker installation scripts and required packages for supported Ubuntu and Debian releases.
 * `compose.sh` — Runs `docker compose` commands across all detected Compose projects.
-* `backup.sh` — Creates a backup archive of this directory.
+* `backup.sh` — Creates a complete backup archive of this repository.
+* `deploy.sh` — Installs Docker (if required), loads Docker images, and starts all Compose stacks.
+* `backup-restore.sh` — Verifies and extracts a backup archive.
 * `readme.md` — This document.
+
+---
 
 ## Creating a Backup
 
@@ -17,55 +23,88 @@ This directory contains everything needed to restore the Docker environment on a
 sudo ./backup.sh
 ```
 
-The backup script:
+The backup process:
 
-- Stops all Docker stacks.
-- Saves Docker images.
-- Archives the entire `docker/` directory.
-- Generates a SHA-256 checksum.
-- Keeps the newest 3 backups.
-- Restarts all stacks automatically.
+* Saves the current Docker images.
+* Stops all Docker stacks cleanly.
+* Creates a compressed archive of the entire `docker/` directory.
+* Generates a SHA-256 checksum.
+* Keeps the newest three backups.
+* Restarts all Docker stacks automatically.
 
-## Restoring the Environment
+Each backup is completely self-contained and can be restored without Internet access.
 
-### 1. Extract the archive
+---
+
+## Recovering a Backup
+
+`backup-restore.sh` is intended to be stored alongside the backup archives.
+
+Run it without arguments to choose a backup interactively:
 
 ```bash
-tar xzf docker_YYYYMMDD_HHMMSS.tar.gz -C ~/
+bash backup-restore.sh
 ```
 
-The directory should be restored as:
+Or restore a specific archive:
+
+```bash
+bash backup-restore.sh docker_YYYYMMDD_HHMMSS.tar.zst
+```
+
+The script will:
+
+* Verify the SHA-256 checksum.
+* Ask for confirmation before overwriting the destination.
+* Extract the archive into:
 
 ```text
-~/docker/
+~/docker-restored/docker_YYYYMMDD_HHMMSS/
 ```
 
-### 2. Install Docker (if needed)
+---
+
+## Deploying the Restored Environment
+
+After extraction:
 
 ```bash
-cd ~/docker/install
-sudo ./dockerinstall.sh
+cd ~/docker-restored/docker_YYYYMMDD_HHMMSS/docker
+./deploy.sh
 ```
 
-If Docker is already installed, this step can be skipped.
+The deployment script automatically:
 
-### 3. Load the Docker images
+1. Installs or upgrades Docker using the offline packages (if required).
+2. Loads all archived Docker images.
+3. Starts every Docker Compose project.
+
+---
+
+## Updating Offline Docker Packages
+
+To refresh the offline Docker installation packages:
 
 ```bash
-cd ~/docker/images
-./load-images.sh
+cd install
+./update-offline-packages.sh
 ```
 
-This imports all saved images into the local Docker image cache.
+Packages are stored by operating system, architecture, and distribution codename:
 
-### 4. Start all services
-
-```bash
-cd ~/docker
-./compose.sh up -d
+```text
+install/packages/
+├── ubuntu/
+│   └── amd64/
+│       └── noble/
+└── debian/
+    └── amd64/
+        └── bookworm/
 ```
 
-The script automatically discovers Compose projects and runs the command in each one.
+This makes it possible to maintain offline installers for multiple supported systems in the same repository.
+
+---
 
 ## Common Commands
 
@@ -105,8 +144,11 @@ List available images:
 docker images
 ```
 
+---
+
 ## Notes
 
-* The repository is designed to be portable and work completely offline after extraction.
+* The repository is intended to be the source of truth for the Docker environment.
+* Docker images are archived separately so deployments work without Internet access.
 * Persistent application data is stored alongside each Compose project.
-* Docker images are restored from the `images/` directory, so no Internet connection is required.
+* Backup archives include the complete repository, making each snapshot portable and self-contained.
