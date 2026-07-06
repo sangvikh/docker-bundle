@@ -3,8 +3,21 @@ set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source /etc/os-release
+
+case "$ID" in
+    ubuntu|debian)
+        OS="$ID"
+        DISTRO="${VERSION_CODENAME}"
+        ;;
+    *)
+        echo "Unsupported OS: $ID"
+        exit 1
+        ;;
+esac
+
 ARCH="$(dpkg --print-architecture)"
-PKG_DIR="$DIR/packages/$ARCH"
+PKG_DIR="$DIR/packages/$OS/$ARCH/$DISTRO"
 
 echo "--- Docker Offline Installer ---"
 echo "Architecture: $ARCH"
@@ -28,7 +41,12 @@ fi
 install_docker() {
     echo "Installing Docker packages..."
 
-    sudo dpkg -i "${DEBS[@]}" || sudo apt-get install -f -y
+sudo dpkg -i "${DEBS[@]}"
+
+    if [ $? -ne 0 ]; then
+        echo "WARNING: dpkg reported issues. No automatic apt-fix in offline mode."
+        exit 1
+    fi
 
     sudo systemctl enable docker
     sudo systemctl start docker

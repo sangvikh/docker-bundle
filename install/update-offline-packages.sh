@@ -4,9 +4,20 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 ARCH="$(dpkg --print-architecture)"
-DISTRO="$(lsb_release -cs)"
+source /etc/os-release
 
-PKG_DIR="$DIR/packages/$ARCH"
+case "$ID" in
+    ubuntu|debian)
+        OS="$ID"
+        DISTRO="${VERSION_CODENAME}"
+        ;;
+    *)
+        echo "Unsupported OS: $ID"
+        exit 1
+        ;;
+esac
+
+PKG_DIR="$DIR/packages/$OS/$ARCH/$DISTRO"
 mkdir -p "$PKG_DIR"
 
 KEYRING="/usr/share/keyrings/docker-archive-keyring.gpg"
@@ -21,7 +32,6 @@ PACKAGES=(
 
 cleanup() {
     sudo rm -f "$REPO_FILE"
-    sudo rm -f "$KEYRING"
 }
 
 trap cleanup EXIT
@@ -34,21 +44,18 @@ echo "Target       : $PKG_DIR"
 echo
 echo "--- Cleaning old packages ---"
 
-rm -f \
-    "$PKG_DIR"/docker-ce_*.deb \
-    "$PKG_DIR"/docker-ce-cli_*.deb \
-    "$PKG_DIR"/containerd.io_*.deb \
-    "$PKG_DIR"/docker-compose-plugin_*.deb
+find "$PKG_DIR" -maxdepth 1 -type f -name "*.deb" -delete
 
 echo
 echo "--- Adding temporary Docker repository ---"
 
+KEYRING="/usr/share/keyrings/docker.gpg"
+
 curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" \
-    | gpg --dearmor -o /tmp/docker.gpg
+| gpg --batch --yes --dearmor \
+| sudo tee "$KEYRING" > /dev/null
 
-sudo mv /tmp/docker.gpg "$KEYRING"
-
-echo "deb [arch=$ARCH signed-by=$KEYRING] https://download.docker.com/linux/ubuntu $DISTRO stable" \
+echo "deb [arch=$ARCH signed-by=$KEYRING] https://download.docker.com/linux/$OS $DISTRO stable" \
     | sudo tee "$REPO_FILE" >/dev/null
 
 sudo apt update
