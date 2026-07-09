@@ -7,20 +7,32 @@ ARCH="$(dpkg --print-architecture)"
 source /etc/os-release
 
 case "$ID" in
-    ubuntu|debian)
-        OS="$ID"
-        DISTRO="${VERSION_CODENAME}"
+    ubuntu)
+        OS="ubuntu"
+        DISTRO="$VERSION_CODENAME"
+        ;;
+    debian)
+        OS="debian"
+        DISTRO="$VERSION_CODENAME"
         ;;
     *)
-        echo "Unsupported OS: $ID"
-        exit 1
+        if [[ "$ID_LIKE" == *ubuntu* ]] && [[ -n "$UBUNTU_CODENAME" ]]; then
+            OS="ubuntu"
+            DISTRO="$UBUNTU_CODENAME"
+        elif [[ "$ID_LIKE" == *debian* ]]; then
+            OS="debian"
+            DISTRO="$VERSION_CODENAME"
+        else
+            echo "Unsupported OS: $ID"
+            exit 1
+        fi
         ;;
 esac
 
 PKG_DIR="$DIR/packages/$OS/$ARCH/$DISTRO"
 mkdir -p "$PKG_DIR"
 
-KEYRING="/usr/share/keyrings/docker-archive-keyring.gpg"
+KEYRING="/usr/share/keyrings/docker.gpg"
 REPO_FILE="/etc/apt/sources.list.d/docker.list"
 
 PACKAGES=(
@@ -48,8 +60,6 @@ find "$PKG_DIR" -maxdepth 1 -type f -name "*.deb" -delete
 
 echo
 echo "--- Adding temporary Docker repository ---"
-
-KEYRING="/usr/share/keyrings/docker.gpg"
 
 curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" \
 | gpg --batch --yes --dearmor \
