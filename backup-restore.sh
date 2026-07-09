@@ -67,34 +67,26 @@ echo
 echo "=== Extract target ==="
 echo "Destination: $DEST"
 
+echo
+echo "⚠️  This will:"
+echo "   - delete $DEST if it exists"
+echo "   - extract backup contents into it"
+echo
+
+read -rp "Type YES to proceed with restore: " confirm
+[[ "$confirm" == "YES" ]] || {
+    echo "Aborted."
+    exit 1
+}
+
 # ----------------------------
-# Safety: destination handling
+# Safe cleanup + extract
 # ----------------------------
-if [ -d "$DEST" ]; then
-    echo
-    echo "⚠️  WARNING: Destination already exists:"
-    echo "    $DEST"
-    echo
-    echo "This will DELETE and recreate it."
-
-    read -rp "Type YES to overwrite: " confirm
-    [[ "$confirm" == "YES" ]] || {
-        echo "Aborted."
-        exit 1
-    }
-
-    rm -rf "$DEST"
-fi
-
+rm -rf "$DEST"
 mkdir -p "$DEST"
 
-# ----------------------------
-# Extract
-# ----------------------------
 echo
 echo "=== Extracting backup ==="
-
-mkdir -p "$DEST"
 
 tar --zstd -xf "$BACKUP_PATH" -C "$DEST"
 
