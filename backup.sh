@@ -8,7 +8,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_SH="$SCRIPT_DIR/compose.sh"
 
-NAS_DIR="/mnt/sangvikh-nas/Backup/sangvikh-server/docker"
+NAS_DIR="/mnt/sangvikh-nas/backup/srv01/docker"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$NAS_DIR/docker_$TIMESTAMP.tar.zst"
 BACKUP_KEEP=3
