@@ -40,6 +40,7 @@ PACKAGES=(
     docker-ce-cli
     containerd.io
     docker-compose-plugin
+    docker-buildx-plugin
 )
 
 cleanup() {
