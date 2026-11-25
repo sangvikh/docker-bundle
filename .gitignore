@@ -7,8 +7,9 @@ images/image-digests.txt
 stacks/*
 !stacks/.gitkeep
 
-# Assets folder
-assets/
+# Assets, but keep folder
+assets/*
+!assets/.gitkeep
 
 # Offline packages
 install/packages/
