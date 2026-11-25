@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NAS_DIR="${NAS_DIR:-/mnt/sangvikh-nas/Backup/sangvikh-server/docker}"
+NAS_DIR="${NAS_DIR:-/mnt/sangvikh-nas/backup/srv01/docker}"
 WORKDIR="${WORKDIR:-$HOME/docker-restored}"
 
 # ----------------------------
