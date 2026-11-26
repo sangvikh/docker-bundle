@@ -1,81 +1,87 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
-
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source /etc/os-release
 
-case "$ID" in
-    ubuntu|debian)
-        OS="$ID"
-        DISTRO="${VERSION_CODENAME}"
-        ;;
-    *)
-        echo "Unsupported OS: $ID"
-        exit 1
-        ;;
+case "${ID:-}" in
+    ubuntu|debian) OS="$ID" ;;
+    *) echo "Unsupported OS: ${ID:-unknown}" >&2; exit 1 ;;
 esac
 
+DISTRO="${VERSION_CODENAME:-}"
+[[ -n "$DISTRO" ]] || { echo "Could not determine distro codename." >&2; exit 1; }
 ARCH="$(dpkg --print-architecture)"
 PKG_DIR="$DIR/packages/$OS/$ARCH/$DISTRO"
 
 echo "--- Docker Offline Installer ---"
 echo "Architecture: $ARCH"
+echo "Distribution: $OS $DISTRO"
 
-if [ ! -d "$PKG_DIR" ]; then
-    echo "ERROR: No package directory found:"
-    echo "  $PKG_DIR"
+if [[ ! -d "$PKG_DIR" ]]; then
+    echo "ERROR: No package directory found: $PKG_DIR" >&2
     exit 1
 fi
 
 shopt -s nullglob
 DEBS=("$PKG_DIR"/*.deb)
 shopt -u nullglob
-
-if [ ${#DEBS[@]} -eq 0 ]; then
-    echo "ERROR: No .deb packages found in:"
-    echo "  $PKG_DIR"
+if ((${#DEBS[@]} == 0)); then
+    echo "ERROR: No .deb packages found in: $PKG_DIR" >&2
     exit 1
 fi
 
-install_docker() {
-    echo "Installing Docker packages..."
+docker_deb=""
+for deb in "${DEBS[@]}"; do
+    if [[ "$(dpkg-deb -f "$deb" Package)" == docker-ce ]]; then
+        docker_deb="$deb"
+        break
+    fi
+done
+if [[ -z "$docker_deb" ]]; then
+    echo "ERROR: Bundle is missing the docker-ce package." >&2
+    exit 1
+fi
 
-sudo dpkg -i "${DEBS[@]}"
+OFFLINE_VERSION="$(dpkg-deb -f "$docker_deb" Version)"
+INSTALLED_VERSION="$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || true)"
+PACKAGE_STATUS="$(dpkg-query -W -f='${db:Status-Abbrev}' docker-ce 2>/dev/null || true)"
 
-    if [ $? -ne 0 ]; then
-        echo "WARNING: dpkg reported issues. No automatic apt-fix in offline mode."
+echo "Installed docker-ce: ${INSTALLED_VERSION:-none} (${PACKAGE_STATUS:-not installed})"
+echo "Bundle docker-ce  : $OFFLINE_VERSION"
+
+NEEDS_INSTALL=0
+if [[ "$PACKAGE_STATUS" != "ii " || -z "$INSTALLED_VERSION" ]]; then
+    NEEDS_INSTALL=1
+elif dpkg --compare-versions "$OFFLINE_VERSION" gt "$INSTALLED_VERSION"; then
+    NEEDS_INSTALL=1
+fi
+
+if ((NEEDS_INSTALL)); then
+    echo "Installing Docker packages from offline bundle..."
+    if ! sudo dpkg -i "${DEBS[@]}"; then
+        echo "ERROR: Package installation failed. The bundle may be missing dependencies." >&2
+        echo "Add the missing target-distribution packages to the offline bundle and retry." >&2
         exit 1
     fi
-
-    sudo systemctl enable docker
-    sudo systemctl start docker
-
-    echo
-    echo "--- Docker version ---"
-    docker --version
-    docker compose version
-}
-
-if command -v docker >/dev/null 2>&1; then
-    INSTALLED_VERSION="$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version | awk '{print $3}' | tr -d ',')"
-
-    PACKAGE="$(basename "$PKG_DIR"/docker-ce_*.deb)"
-    OFFLINE_VERSION="${PACKAGE#docker-ce_}"
-    OFFLINE_VERSION="${OFFLINE_VERSION%%-*}"
-    OFFLINE_VERSION="${OFFLINE_VERSION#5%3a}"
-
-    echo "Installed : $INSTALLED_VERSION"
-    echo "Offline   : $OFFLINE_VERSION"
-
-    if dpkg --compare-versions "$OFFLINE_VERSION" gt "$INSTALLED_VERSION"; then
-        echo "Offline bundle is newer. Upgrading..."
-        install_docker
-    else
-        echo "Docker is already up to date."
-    fi
 else
-    echo "Docker not found."
-    install_docker
+    echo "docker-ce is installed at the bundle version."
 fi
+
+# A configured package and a running daemon are separate checks. Always enable
+# and start the service, including when the client exists but the daemon does not.
+sudo systemctl enable docker
+sudo systemctl start docker
+
+if ! sudo systemctl is-active --quiet docker; then
+    echo "ERROR: Docker service did not become active." >&2
+    sudo systemctl status docker --no-pager || true
+    exit 1
+fi
+
+echo
+echo "--- Docker version ---"
+docker --version
+docker compose version
+echo "Docker daemon is active."
 
