@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NAS_DIR="${NAS_DIR:-/mnt/sangvikh-nas/backup/ai01/docker}"
+source "$SCRIPT_DIR/.env"
+: "${NAS_DIR:?NAS_DIR must be set in $SCRIPT_DIR/.env}"
 WORKDIR="${WORKDIR:-$HOME/docker-restored}"
 
 # ----------------------------
